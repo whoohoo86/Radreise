@@ -1,0 +1,20 @@
+@import '@fontsource/atkinson-hyperlegible/400.css';
+@import '@fontsource/atkinson-hyperlegible/700.css';
+
+:root {
+  --ink: #14212b;
+  --paper: #f2f5f3;
+  --panel: #ffffff;
+  --line: #d5ddd9;
+  --mute: #526169;
+  --accent: #0e6b7a;
+  --danger: #a8231b;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; font-size: 16px; line-height: 1.35; color: var(--ink); background: var(--paper); }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }

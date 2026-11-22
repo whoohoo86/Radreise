@@ -1,0 +1,5 @@
+{
+  "appId": "de.fabian.radreise",
+  "appName": "Radreise",
+  "webDir": "dist/radreise/browser"
+}

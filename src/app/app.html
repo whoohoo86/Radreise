@@ -1,0 +1,23 @@
+<main [attr.data-tab]="store.tab()">
+  <section class="map"><app-map-view /></section>
+  <section class="explorer"><app-explorer /></section>
+  <section class="planner"><app-planner /></section>
+
+  @if (store.toast(); as t) {
+    <div class="toast" [class.error]="t.tone === 'error'" role="status">
+      <span>{{ t.text }}</span>
+      @if (t.action; as a) {
+        <button type="button" (click)="store.tab.set(a.tab); store.toast.set(null)">{{ a.label }}</button>
+      }
+    </div>
+  }
+</main>
+
+<nav class="tabs" aria-label="Bereiche">
+  @for (t of tabs; track t.id) {
+    <button type="button" [class.on]="store.tab() === t.id" [attr.aria-current]="store.tab() === t.id ? 'page' : null" (click)="store.tab.set(t.id)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="t.icon" /></svg>
+      {{ t.label }}
+    </button>
+  }
+</nav>
