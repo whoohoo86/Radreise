@@ -25,3 +25,5 @@ section { min-height: 0; }
   border: 0; background: none; font: inherit; font-size: .85rem; color: var(--mute); }
 .tabs button.on { color: var(--accent); font-weight: 700; box-shadow: inset 0 3px 0 var(--accent); }
 .tabs svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+[data-tab='planer'] .toast { top: 0; left: 0; right: 0; border-radius: 0 0 12px 12px; min-height: 52px; }

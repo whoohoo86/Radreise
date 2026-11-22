@@ -1,5 +1,5 @@
 // Wird in die bikerouter-Seite injiziert. Fängt clientseitig erzeugte Downloads
-// (Blob-/data:-URLs) ab und reicht sie an die App weiter, statt sie herunterzuladen.
+// (data:-/Blob-URLs) ab und reicht sie an die App weiter, statt sie herunterzuladen.
 (function () {
   if (window.__radreiseHooked) return;
   window.__radreiseHooked = true;
@@ -12,7 +12,7 @@
     return url;
   };
 
-  function send(name, blob) {
+  function sendBlob(name, blob) {
     var reader = new FileReader();
     reader.onload = function () {
       var s = String(reader.result);
@@ -21,11 +21,29 @@
     reader.readAsDataURL(blob);
   }
 
+  // data:-URLs direkt zerlegen, ohne fetch (wäre durch eine CSP der Seite blockierbar)
+  function sendDataUrl(name, href) {
+    var i = href.indexOf(',');
+    var head = href.slice(5, i);
+    var body = href.slice(i + 1);
+    var b64;
+    if (/;base64/i.test(head)) {
+      b64 = body;
+    } else {
+      var bytes = new TextEncoder().encode(decodeURIComponent(body));
+      var bin = '';
+      for (var k = 0; k < bytes.length; k++) bin += String.fromCharCode(bytes[k]);
+      b64 = btoa(bin);
+    }
+    window.RadreiseNative.onFile(name || 'export', head.split(';')[0], b64);
+  }
+
   function capture(href, name) {
+    if (href.indexOf('data:') === 0) { sendDataUrl(name, href); return true; }
     var blob = blobs.get(href);
-    if (blob) { send(name, blob); return true; }
-    if (/^(blob|data):/.test(href)) {
-      fetch(href).then(function (r) { return r.blob(); }).then(function (b) { send(name, b); });
+    if (blob) { sendBlob(name, blob); return true; }
+    if (href.indexOf('blob:') === 0) {
+      fetch(href).then(function (r) { return r.blob(); }).then(function (b) { sendBlob(name, b); });
       return true;
     }
     return false;

@@ -18,7 +18,7 @@ const nf = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
       <div class="actions">
         <button type="button" (click)="adding.set(true)">Neuer Ordner</button>
         <button type="button" (click)="picker.click()">GPX importieren</button>
-        <input #picker type="file" hidden multiple accept=".gpx,application/gpx+xml,application/xml,text/xml" (change)="onFiles($event)" />
+        <input #picker type="file" hidden multiple (change)="onFiles($event)" />
       </div>
       @if (adding()) {
         <form class="add" (submit)="$event.preventDefault(); create(name.value); name.value = ''">

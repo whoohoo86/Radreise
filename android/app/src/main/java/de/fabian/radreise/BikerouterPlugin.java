@@ -5,6 +5,9 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Base64;
+import android.util.Log;
+import android.webkit.CookieManager;
+import android.widget.Toast;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
@@ -21,6 +24,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -87,17 +93,7 @@ public class BikerouterPlugin extends Plugin {
                 s.setJavaScriptEnabled(true);
                 s.setDomStorageEnabled(true); // bikerouter speichert Profile/Einstellungen im Browser
                 s.setSupportMultipleWindows(false);
-                web.addJavascriptInterface(new Object() {
-                    @JavascriptInterface
-                    public void onFile(String name, String mime, String base64) {
-                        String text = new String(Base64.decode(base64, Base64.DEFAULT), StandardCharsets.UTF_8);
-                        JSObject o = new JSObject();
-                        o.put("filename", name);
-                        o.put("mime", mime);
-                        o.put("text", text);
-                        notifyListeners("fileExported", o);
-                    }
-                }, "RadreiseNative");
+                web.addJavascriptInterface(new JsBridge(), "RadreiseNative");
                 web.setWebViewClient(new WebViewClient() {
                     @Override
                     public void onPageStarted(WebView v, String u, Bitmap f) { v.evaluateJavascript(loadHook(), null); }
@@ -112,12 +108,18 @@ public class BikerouterPlugin extends Plugin {
                         return true;
                     }
                 });
-                // Fallback, falls ein Download doch am Hook vorbeikommt (Blob-/data:-URLs).
+                // Fallback, falls ein Download am Hook vorbeikommt: data:, blob: und http(s).
                 web.setDownloadListener((u, ua, cd, mime, len) -> {
-                    if (u.startsWith("blob:") || u.startsWith("data:")) {
-                        String name = URLUtil.guessFileName(u, cd, mime);
+                    String name = URLUtil.guessFileName(u, cd, mime);
+                    if (u.startsWith("data:")) {
+                        deliverDataUrl(u, name);
+                    } else if (u.startsWith("blob:")) {
                         web.evaluateJavascript(
                             "window.__radreiseCapture && window.__radreiseCapture(" + JSONquote(u) + "," + JSONquote(name) + ")", null);
+                    } else if (u.startsWith("http://") || u.startsWith("https://")) {
+                        new Thread(() -> fetchAndDeliver(u, ua, name)).start();
+                    } else {
+                        toast("Download-Typ nicht unterstützt: " + u.substring(0, Math.min(u.length(), 30)));
                     }
                 });
                 backCallback = new OnBackPressedCallback(false) {
@@ -137,6 +139,70 @@ public class BikerouterPlugin extends Plugin {
             backCallback.setEnabled(true);
             call.resolve();
         });
+    }
+
+
+    // ---- Auslieferung an Angular -------------------------------------------------
+
+    public class JsBridge {
+        @JavascriptInterface
+        public void onFile(String name, String mime, String base64) {
+            deliver(name, mime, Base64.decode(base64, Base64.DEFAULT));
+        }
+    }
+
+    private void toast(String msg) {
+        getActivity().runOnUiThread(() -> Toast.makeText(getActivity(), msg, Toast.LENGTH_LONG).show());
+    }
+
+    private void deliver(String name, String mime, byte[] bytes) {
+        Log.d("Bikerouter", "Export empfangen: " + name + ", " + bytes.length + " Bytes");
+        JSObject o = new JSObject();
+        o.put("filename", name);
+        o.put("mime", mime == null ? "" : mime);
+        o.put("text", new String(bytes, StandardCharsets.UTF_8));
+        getActivity().runOnUiThread(() -> {
+            Toast.makeText(getActivity(), "Export empfangen: " + name + " (" + Math.max(1, bytes.length / 1024) + " KB)", Toast.LENGTH_SHORT).show();
+            notifyListeners("fileExported", o);
+        });
+    }
+
+    private void deliverDataUrl(String u, String name) {
+        try {
+            int comma = u.indexOf(',');
+            String head = u.substring(5, comma);
+            String body = u.substring(comma + 1);
+            byte[] bytes = head.contains(";base64")
+                ? Base64.decode(body, Base64.DEFAULT)
+                : URLDecoder.decode(body, "UTF-8").getBytes(StandardCharsets.UTF_8);
+            deliver(name, head.split(";")[0], bytes);
+        } catch (Exception e) {
+            toast("Export konnte nicht gelesen werden: " + e.getMessage());
+        }
+    }
+
+    private void fetchAndDeliver(String u, String ua, String name) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL(u).openConnection();
+            c.setInstanceFollowRedirects(true);
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(30000);
+            if (ua != null) c.setRequestProperty("User-Agent", ua);
+            String cookie = CookieManager.getInstance().getCookie(u);
+            if (cookie != null) c.setRequestProperty("Cookie", cookie);
+            try (InputStream in = c.getInputStream()) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (out.size() > 30_000_000) throw new Exception("Datei zu groß");
+                }
+                deliver(name, c.getContentType(), out.toByteArray());
+            }
+        } catch (Exception e) {
+            toast("Download fehlgeschlagen: " + e.getMessage());
+        }
     }
 
     private static String JSONquote(String s) {

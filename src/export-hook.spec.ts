@@ -50,6 +50,33 @@ describe('export-hook.js', () => {
     expect(sent.length).toBe(1);
   });
 
+  it('fängt den BRouter-Web-Weg ab: data:-URL aus readAsDataURL, Anker angehängt, click(), entfernt', async () => {
+    const blob = new Blob(['<gpx>äöü</gpx>'], { type: 'application/gpx+xml;charset=utf-8' });
+    const url: string = await new Promise((res) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.readAsDataURL(blob);
+    });
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Tour.gpx';
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    expect(sent.length).toBe(1);
+    expect(sent[0].name).toBe('Tour.gpx');
+    expect(new TextDecoder().decode(Uint8Array.from(atob(sent[0].b64), (c) => c.charCodeAt(0)))).toBe('<gpx>äöü</gpx>');
+  });
+
+  it('versteht data:-URLs ohne base64', async () => {
+    const a = document.createElement('a');
+    a.href = 'data:application/gpx+xml,%3Cgpx%2F%3E';
+    a.download = 'p.gpx';
+    a.click();
+    expect(atob(sent[0].b64)).toBe('<gpx/>');
+  });
+
   it('ignoriert normale Links', async () => {
     const a = document.createElement('a');
     a.href = 'https://example.org/';
